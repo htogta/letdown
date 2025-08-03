@@ -1,0 +1,41 @@
+(* tags are handled in a separate pass before parsing *)
+
+block = heading
+      | list
+      | image
+      | quote
+      | code
+      | paragraph ;
+
+heading = ( "# " | "## " | "### " ) , [ text ] , "\n" ;
+
+list = listitem , { listitem } ;
+listitem = "- " , [ span ] , "\n" ;
+
+image = "=> " , PATH , whitespace , { whitespace } , [ text ] , "\n" ;
+
+quote = "> " , [ span ] , "\n" ;
+
+code = "```\n" , [ text ] , "\n```\n" ;
+
+paragraph = { span } , "\n" ;
+
+span = emphasis
+     | link
+     | wikilink
+     | preformatted
+     | text
+     ;
+
+(* note: comments are just text surrounded by "%%" *)
+
+emphasis = "*" , [ text ] , "*" ;
+
+link = "[" , [ text ] , "](" , PATH , ")" ;
+
+wikilink = "[[" , text , "]]" ;
+
+preformatted = "`" , [ text ] , "`" ;
+
+text = ONE OR MORE CHARS - "\n" ;
+whitespace = ONE OR MORE CHARS - "\n" ;

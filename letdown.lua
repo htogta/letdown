@@ -1,4 +1,5 @@
 -- letdown file parsing in lua, emitting HTML as its output
+local VERSION = "0.1.0-beta"
 
 -- this one's a bit complicated, as tags and comments are extracted in the
 -- first pass, UNLESS they occur in an inline code snippet or code block
@@ -233,6 +234,7 @@ end
 local flags = {
   tag_footer = true,
   help = false,
+  version = false,
   meta_tags = true,
   stylesheet = true,
   boilerplate = true,
@@ -246,6 +248,7 @@ while i <= #arg do
   local a = arg[i]
   if a == "-t" then flags.tag_footer = false
   elseif a == "-h" then flags.help = true
+  elseif a == "-v" then flags.version = true
   elseif a == "-m" then flags.meta_tags = false
   elseif a == "-s" then flags.stylesheet = false
   elseif a == "-b" then
@@ -267,10 +270,13 @@ while i <= #arg do
   i = i + 1
 end
 
+local USAGE = "Usage: lua letdown.lua [-h] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let"
+
 -- print help information
 if flags.help then
-  print("Usage: lua letdown.lua [-h] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let")
+  print(USAGE)
   print(" -h           print help text")  
+  print(" -v           print version info")
   print(' -t           disable <p class="tags"> tag')
   print(' -m           disable <meta name="keywords" tag')
   print(' -s           disable <link rel="stylesheet"> tag')
@@ -279,10 +285,15 @@ if flags.help then
   print(" -o filename  write output to filename, regardless of -p flag\n")
 end
 
+-- print version info
+if flags.version then
+  print("letdown parser reference implementation, version " .. VERSION)
+end
+
 -- ensure input file provided
 if not input_file then
   io.stderr:write("[ERROR] No input file provided\n")
-  io.stderr:write("Usage: lua letdown.lua [-h] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let\n")
+  io.stderr:write("Usage: lua letdown.lua [-h] [-v] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let\n")
   os.exit(1)
 end
 

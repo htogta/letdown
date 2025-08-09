@@ -1,0 +1,43 @@
+filetype: letdown
+
+detect:
+  filename: "\\.(let|letdown)$"
+
+rules:
+    # quotes
+  - statement:  "^>.*"
+
+    # emphasis
+  - type: "(^|[[:space:]])(_[^ ][^_]*_|\\*[^ ][^*]*\\*)"
+
+    # headlines
+  - special:  "^={1,3}.*"
+
+    # lists
+  - identifier:   "^[[:space:]]*[\\*+-] |^[[:space:]]*[0-9]+\\. "
+
+    # links
+  - constant: "\\[[^]]+\\]"
+  - constant: "\\[([^][]|\\[[^]]*\\])*\\]\\([^)]+\\)"
+
+    # images
+  - underlined: "^=>[[:space:]]+[^[:space:]]+(?:[[:space:]]+.*)?$"
+
+    # urls
+  - underlined: "https?://[^ )>]+"
+
+    # tags
+  - constant.string: "(^|[[:space:]])#[A-Za-z0-9_-]+"
+
+    # comments
+  - comment:
+      start: ";;"
+      end: ";;"
+      rules:
+        - todo: "(TODO|XXX|FIXME):?"
+
+  - special: "^```$"
+
+  - special:
+      start: "`"
+      end: "`"

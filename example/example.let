@@ -9,8 +9,7 @@ That thing above is an `h1`
 ;; this is a comment ;;
 
 Hello everyone! This is some *emphasized text*. Here is a [wikilink] and a 
-link to the website [Wikipedia]. Oh, and `here is 
-some inline code`. #markup-languages
+link to the website [Wikipedia]. Oh, and `here is some inline code`. #markup-languages
 
 [Wikipedia]: https://en.wikipedia.org/
 ;; this is a link definition, they go on their own line and aren't rendered to

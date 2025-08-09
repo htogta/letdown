@@ -65,5 +65,5 @@ See `tour.md` for a description/tour of the language.
 
 See `example.let` for an example that showcases every feature of the language.
 
-`letdown.yaml` contains syntax highlighting support for the 
+`extras/letdown.yaml` contains syntax highlighting support for the 
 [micro](https://github.com/zyedidia/micro) text editor.

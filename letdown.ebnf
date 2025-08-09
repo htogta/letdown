@@ -1,41 +1,42 @@
-(* tags are handled in a separate pass before parsing *)
+(* 
+this grammar leaves out #tags and ;; comments ;; which are stripped out from 
+anywhere in the file, except within the bodies of code blocks and inline code.
+*)
+
+content = { block , "\n" } , EOF ;
 
 block = heading
       | list
+      | linkdef
       | image
       | quote
       | code
       | paragraph ;
 
-heading = ( "# " | "## " | "### " ) , [ text ] , "\n" ;
+heading = ( h1 | h2 | h3 ) , "\n" ;
+h1 = "= " , TEXT ;
+h2 = "== " , TEXT ;
+h3 = "=== " , TEXT ;
+
+linkdef = "[" , TEXT , "]: " , PATH , "\n"
+
+image = "=> " , PATH , [ TEXT ] , "\n\n" ;
 
 list = listitem , { listitem } ;
-listitem = "- " , [ span ] , "\n" ;
+listitem = "- " , paragraph ;
 
-image = "=> " , PATH , whitespace , { whitespace } , [ text ] , "\n" ;
+quote = quoteline , { quoteline } ;
+quoteline = "> " , paragraph ;
 
-quote = "> " , [ span ] , "\n" ;
-
-code = "```\n" , [ text ] , "\n```\n" ;
+code = "```" , "\n" , TEXT , "\n" , "```\n\n" ;
 
 paragraph = { span } , "\n" ;
 
-span = emphasis
-     | link
-     | wikilink
-     | preformatted
-     | text
-     ;
+span = link
+     | pre
+     | emphasis
+     | TEXT ;
 
-(* note: comments are just text surrounded by "%%" *)
-
-emphasis = "*" , [ text ] , "*" ;
-
-link = "[" , [ text ] , "](" , PATH , ")" ;
-
-wikilink = "[[" , text , "]]" ;
-
-preformatted = "`" , [ text ] , "`" ;
-
-text = ONE OR MORE CHARS - "\n" ;
-whitespace = ONE OR MORE CHARS - "\n" ;
+link = "[" , TEXT , "]" ;
+pre = "`" , TEXT , "`" ;
+emphasis = "*" , TEXT , "*" ;

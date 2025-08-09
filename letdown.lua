@@ -1,346 +1,300 @@
--- letdown file parsing in lua, emitting HTML as its output
-local VERSION = "0.1.0-beta"
+-- letdown file parsing in lua, emitting html as output
+local VERSION = "1.0.0-beta"
 
--- this one's a bit complicated, as tags and comments are extracted in the
--- first pass, UNLESS they occur in an inline code snippet or code block
-local function strip_comments_and_extract_tags(text)
-  local tags = {}
-  local seen = {}
-  local output = {}
+local function escape_html(s)
+  return s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+end
+
+local linkdefs = {}
+local hashtags = {}
+
+-- remove comments n hashtags unless inside inline code or code blocks
+local function strip_comments_and_tags(text)
+  local seen = {} -- don't record duplicate tags
+
+  local out = {}
   local i = 1
-
   while i <= #text do
-    -- handling code blocks
-    if text:sub(i, i+2) == "```" then -- check for block-level code start/end
+    -- code block
+    if text:sub(i, i+2) == "```" then
       local block_end = text:find("\n```", i+3)
       if block_end then
-        local block = text:sub(i, block_end + 2)
-        table.insert(output, block)
-        i = block_end + 3
+        table.insert(out, text:sub(i, block_end + 3))
+        i = block_end + 4
       else
-        -- malformed code block; treat the rest as plain text
-        table.insert(output, text:sub(i))
+        table.insert(out, text:sub(i))
         break
       end
-
-    -- handling inline code
+    -- inline code
     elseif text:sub(i, i) == "`" then
-      local close_tick = text:find("`", i + 1)
+      local close_tick = text:find("`", i+1)
       if close_tick then
-        local inline = text:sub(i, close_tick)
-        table.insert(output, inline)
+        table.insert(out, text:sub(i, close_tick))
         i = close_tick + 1
       else
-        table.insert(output, text:sub(i))
+        table.insert(out, text:sub(i))
         break
       end
-    
-    -- normal text
     else
-      -- process up to next backtick or code block
-      local next_code = text:find("[`]", i)
-      local segment_end = next_code and next_code - 1 or #text
+      -- normal text
+      local next_special = text:find("[`]", i)
+      local segment_end = next_special and next_special - 1 or #text
       local segment = text:sub(i, segment_end)
-
+      
       -- strip comments
-      segment = segment:gsub("%%%%.-%%%%", "")
-
-      -- extract tags
-      for tag in segment:gmatch("#([%w_%-]+)") do
+      segment = segment:gsub(";;.-;;", "")
+      
+      -- strip hashtags but store them
+      segment = segment:gsub("(%s*)#([%w_%-]+)(%s*)", function(pre, tag, post)
         if not seen[tag] then
-          table.insert(tags, tag)
+          table.insert(hashtags, tag)
           seen[tag] = true
         end
-      end
-
-      -- remove tags from visible text
-      segment = segment:gsub("#[%w_%-]+", "")
+        return pre .. post
+      end)
       
-      table.insert(output, segment)
+      table.insert(out, segment)
       i = segment_end + 1
     end
   end
-
-  return table.concat(output), tags
+  
+  return table.concat(out)
 end
 
--- splitting block elements
-local function split_blocks(text)
-  local blocks = {}
-  local block = {}
-
-  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
-    if line:match("^%s*$") then 
-      if #block > 0 then
-        table.insert(blocks, table.concat(block, "\n"))
-        block = {}
-      end
-    else
-      table.insert(block, line)
-    end
-  end
-
-  if #block > 0 then
-    table.insert(blocks, table.concat(block, "\n"))
-  end
-
-  return blocks
-end
-
--- html emitting functions below VVV
-
--- handling html escaping
-local function escape_html(text)
-  return text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
-end
-
--- span handling (inline code, emphasis, wikilinks, standard links)
 local function parse_spans(text)
-  -- `inline code`
-  text = text:gsub("`(.-)`", function(code)
+  -- inline code
+  text = text:gsub("`(.-)`", function (code)
     return "<code>" .. escape_html(code) .. "</code>"
   end)
 
-  -- *emphasis*
+  -- emphasis
   text = text:gsub("%*(.-)%*", "<em>%1</em>")
 
-  -- [[wiki links]]
-  text = text:gsub("%[%[([^\n%]]-)%]%]", function(name)
-    local clean = name:gsub("^%s+", ""):gsub("%s+$", "") -- trim
-    local filename = clean:gsub("%s+", "_")
-    local ext = filename:match("%.%w+$")
-    if not ext then filename = filename .. ".html" end
-    return string.format('<a href="%s">%s</a>', escape_html(filename), escape_html(clean))
-  end)
-
-  -- [inline link](url)
-  text = text:gsub("%[([^%[%]]-)%]%((.-)%)", function(label, url)
-    if label == "" then label = url end
-    return string.format('<a href="%s" target="_blank">%s</a>', escape_html(url), escape_html(label))
+  -- reference-style links
+  text = text:gsub("%[(.-)%]", function(label)
+    local trimmed = label:match("^%s*(.-)%s*$")
+    local url = linkdefs[trimmed]
+    if url then
+      -- links defined with a linkdef will open in a new tab
+      return string.format('<a href="%s" target="_blank">%s</a>', escape_html(url), escape_html(label))
+    else
+      -- assume the path is "label.html" with spaces replaced by underscores
+      local safe_label = trimmed:gsub("%s+", "_")
+      local href = escape_html(safe_label .. ".html")
+      return string.format('<a href="%s">%s</a>', href, escape_html(trimmed))
+    end
   end)
 
   return text
 end
 
-local function emit_heading(line)
-  local level_str = line:match("^(#+)")
-  if not level_str then return nil end -- FIXME this should be unreachable?
+-- emit functions for each block
 
-  local level = #level_str
-  if level > 3 then level = 3 end -- only 3 levels of headings; coz gemtext
-  -- TODO print some kind of warning that the depth goes too far?
-  
-  local content = line:match("^#+%s*(.*)$") or ""
-  return string.format("<h%d>%s</h%d>", level, escape_html(content), level)
+local function emit_heading(line)
+  if line:match("^= ") then
+    return "<h1>" .. escape_html(line:sub(3)) .. "</h1>"
+  elseif line:match("^== ") then
+    return "<h2>" .. escape_html(line:sub(4)) .. "</h2>"
+  elseif line:match("^=== ") then
+    return "<h3>" .. escape_html(line:sub(5)) .. "</h3>"
+  end
 end
 
 local function emit_list(block)
-  local html = {"<ul>"}
+  local html = { "<ul>" }
   for line in block:gmatch("[^\n]+") do
     local item = line:match("^%- (.*)")
-    table.insert(html, string.format("  <li>%s</li>", parse_spans(item or "")))
+    table.insert(html, "  <li>" .. parse_spans(item or "") .. "</li>")
   end
   table.insert(html, "</ul>")
   return table.concat(html, "\n")
 end
 
 local function emit_image(line)
-  local path, alt = line:match("^=>%s*(%S+)%s+(.+)$") 
-  if not path then
-    path = line:match("^=>%s*(%S+)")
-    alt = ""
-  end
+  local path, alt = line:match("^=>%s+(%S+)%s*(.*)")
   return string.format('<img src="%s" alt="%s">', escape_html(path or ""), escape_html(alt or ""))
 end
 
 local function emit_quote(block)
-  local content = block:gsub("^> ", "")
+  local lines = {}
+  for line in block:gmatch("[^\n]+") do
+    lines[#lines + 1] = line:gsub("^> ", "")
+  end
+  local content = table.concat(lines, "\n")
   return string.format("<blockquote>%s</blockquote>", parse_spans(content))
 end
 
 local function emit_code(block)
-  local code = block:match("^```%s*\n(.-)\n```%s*$")
+  local code = block:match("^```%s*\n(.-)\n```")
   return string.format("<pre><code>%s</code></pre>", escape_html(code or ""))
 end
 
 local function emit_paragraph(block)
-  return string.format("<p>%s</p>", parse_spans(block))
+  return "<p>" .. parse_spans(block) .. "</p>"
 end
 
--- emitting the right HTML for each block type
-local function parse_block(block)
-  if block:match("^#") then
-    return emit_heading(block)
-  elseif block:match("^%- ") then
-    return emit_list(block)
-  elseif block:match("^=> ") then
-    return emit_image(block)
-  elseif block:match("^> ") then
-    return emit_quote(block)
-  elseif block:match("^```") then
-    return emit_code(block)
-  else
-    return emit_paragraph(block)
-  end
-end
+-- parse letdown blocks from text
+local function parse_letdown(text)
+  -- strip comments and hashtags first
+  hashtags = {}
+  text = strip_comments_and_tags(text)
 
--- wrapping html blocks in html boilerplate (DOCTYPE and such)
-local function html_head(tags, title, include_meta, include_stylesheet)
-  local tag_csv = table.concat(tags, ", ")
+  local blocks = {}
+  linkdefs = {} -- reset per file
 
-  local head = '<!DOCTYPE html>\n<html lang="en">\n<head>\n'
-  head = head .. '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+  local first_h1 = nil
 
-  if #tags > 0 and include_meta then
-    head = head .. string.format('<meta name="keywords" content="%s">\n', tag_csv)
-  end
+  -- first pass, get link definitions and remove them from text
+  text = text:gsub("\n%[(.-)%]:%s+(%S+)%s*\n", function(label, url)
+    linkdefs[label] = url
+    return "\n"
+  end)
 
-  head = head .. string.format("<title>%s</title>\n", escape_html(title))
-
-  if include_stylesheet then
-    -- TODO CLI flag for specifying stylesheet path?
-    head = head .. '<link rel="stylesheet" type="text/css" href="style.css">\n'
-  end
-
-  head = head .. "</head>\n\n"
-  return head
-end
-
--- main parse function
-local function parse_letdown(raw_text, filename)
-  local text, tags = strip_comments_and_extract_tags(raw_text)
-  local blocks = split_blocks(text)
-  local html_blocks = {}
-
-  local title = nil -- grabbing title from first h1
-
-  for _, block in ipairs(blocks) do
-    if not title and block:match("^#%s+") then
-      title = block:match("^#%s+(.*)") 
+  -- split into blocks by blank line
+  local temp = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    if line:match("^%s*$") then
+      if #temp > 0 then
+        table.insert(blocks, table.concat(temp, "\n"))
+        temp = {}
+      end
+    else
+      table.insert(temp, line)
     end
-
-    table.insert(html_blocks, parse_block(block))
+  end
+  if #temp > 0 then
+    table.insert(blocks, table.concat(temp, "\n"))
   end
 
-  -- fallback to filename for title
-  if not title and filename then
-    title = filename:match("([^/\\]+)%.%w+$") or filename -- strip path and extension
+  -- emit html
+  local html_blocks = {}
+  for _, block in ipairs(blocks) do
+    if block:match("^= ") then
+      local h1_text = block:sub(3)
+      if not first_h1 then first_h1 = h1_text end
+      table.insert(html_blocks, emit_heading(block))
+    elseif block:match("^== ") or block:match("^=== ") then
+      table.insert(html_blocks, emit_heading(block))
+    elseif block:match("^%- ") then
+      table.insert(html_blocks, emit_list(block))
+    elseif block:match("^=> ") then
+      table.insert(html_blocks, emit_image(block))
+    elseif block:match("^> ") then
+      table.insert(html_blocks, emit_quote(block))
+    elseif block:match("^```") then
+      table.insert(html_blocks, emit_code(block))
+    else
+      table.insert(html_blocks, emit_paragraph(block))
+    end
   end
 
-  return table.concat(html_blocks, "\n\n"), tags, title
+  return table.concat(html_blocks, "\n\n"), hashtags, first_h1
 end
 
--- parsing CLI flags
-local flags = {
-  tag_footer = true,
-  help = false,
-  version = false,
-  meta_tags = true,
-  stylesheet = true,
-  boilerplate = true,
-  print_stdout = false,
-  output_file = nil,
-}
+-- cli args/flags
 local input_file = nil
+local help = false
+local version = false
+local print_stdout = false
+local output_file = nil
+local html_template = nil
 
+local function print_usage()
+  print("Usage: letdown.lua [-h] [-v] [-s] [-o filename] [-t template.html] file.let")
+end
+
+-- cli flag parsing
 local i = 1
 while i <= #arg do
   local a = arg[i]
-  if a == "-t" then flags.tag_footer = false
-  elseif a == "-h" then flags.help = true
-  elseif a == "-v" then flags.version = true
-  elseif a == "-m" then flags.meta_tags = false
-  elseif a == "-s" then flags.stylesheet = false
-  elseif a == "-b" then
-    flags.boilerplate = false
-    flags.meta_tags = false
-  elseif a == "-p" then flags.print_stdout = true
+  if a == "-h" then
+    help = true
+  elseif a == "-v" then
+    version = true
+  elseif a == "-p" then
+    print_stdout = true
   elseif a == "-o" then
     i = i + 1
-    if not arg[i] then
-      io.stderr:write("[ERROR] -o flag requires a filename.\n")
+    output_file = arg[i]
+  elseif a == "-t" then
+    i = i + 1
+    html_template = arg[i]
+  else
+    if not input_file then
+      input_file = a
+    else
+      print("Unexpected argument: " .. a)
+      print_usage()
       os.exit(1)
     end
-    flags.output_file = arg[i]
-  elseif a:match("%.let$") or a:match("%.letdown$") then input_file = a
-  else
-    io.stderr:write("Unknown argument: " .. a .. "\n")
-    os.exit(1)
   end
   i = i + 1
 end
 
-local USAGE = "Usage: lua letdown.lua [-h] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let"
-
--- print help information
-if flags.help then
-  print(USAGE)
-  print(" -h           print help text")  
-  print(" -v           print version info")
-  print(' -t           disable <p class="tags"> tag')
-  print(' -m           disable <meta name="keywords" tag')
-  print(' -s           disable <link rel="stylesheet"> tag')
-  print(" -b           only output text inside <body> tag")
-  print(" -p           print output to stdout rather than writing to a file")
-  print(" -o filename  write output to filename, regardless of -p flag\n")
+if help then
+  print_usage()
+  print(" -h                print help text")  
+  print(" -v                print version info")
+  print(" -o filename       write output to filename, regardless of -p tag")
+  print(" -t template.html  use template.html as a template file")
+  print(" -p                write output to stdout only")
+  os.exit(0)
 end
 
--- print version info
-if flags.version then
-  print("letdown parser reference implementation, version " .. VERSION)
+if version then
+  print("letdown to HTML parser reference implementation\n Version " .. VERSION)
+  os.exit(0)
 end
 
--- ensure input file provided
-if not input_file then
-  io.stderr:write("[ERROR] No input file provided\n")
-  io.stderr:write("Usage: lua letdown.lua [-h] [-v] [-t] [-m] [-s] [-b] [-p] [-o filename] file.let\n")
+-- reading input file
+local f = io.open(input_file, "r")
+if not f then
+  print("Could not open file: " .. input_file .. "\n")
   os.exit(1)
 end
+local raw = f:read("*a")
+f:close()
 
--- read input
-local file = io.open(input_file, "r")
-if not file then
-  io.stderr:write("Could not open file: " .. input_file .. "\n")
-  os.exit(1)
-end
-local raw = file:read("*a")
-file:close()
+-- parse
+local body, tags, first_h1 = parse_letdown(raw)
 
--- parsing letdown
-local body, tags, title = parse_letdown(raw)
-local output = body
-
--- adding footer
-if flags.tag_footer then
-  local footer = ""
-  if tags and #tags > 0 then
-    footer = '\n\n<p class="tags">Keywords: <em>' .. table.concat(tags, ", ") .. '</em></p>\n'
+-- if html template specified, fill it
+if html_template then
+  local tf = io.open(html_template, "r")
+  if not tf then
+    print("Could not open template: " .. html_template)
+    os.exit(1)
   end
-  output = output .. footer
+  local template_str = tf:read("*a")
+  tf:close()
+
+  -- get filename without extension
+  local filebase = input_file:match("([^/\\]+)%.let$")
+  if not filebase then
+    filebase = input_file
+  end
+
+  template_str = template_str
+    :gsub("%%body", body or "")
+    :gsub("%%tags", table.concat(tags, ", ") or "")
+    :gsub("%%file", filebase)
+    :gsub("%%h1", first_h1 or "")
+
+  body = template_str
 end
 
--- adding boilerplate
-if flags.boilerplate then
-  local head = html_head(tags, title, flags.meta_tags, flags.stylesheet)
-  output = head .. output
-  output = output .. "\n</body>\n</html>\n"
-end
-
-if flags.print_stdout then
-  print(output)
-end
-
-if flags.output_file then
-  -- write to file, regardless of -p flag
-  local f = io.open(flags.output_file, "w")
-  f:write(output)
-  f:close()
-else
-  -- write to file only if -p flag not present
-  if not flags.print_stdout then
-    local base = input_file:match("([^/\\]+)%.let$") or input_file:match("([^/\\]+)%.letdown$")
-    local f = io.open(base .. ".html", "w")
-    f:write(output)
-    f:close()
+-- output
+if not output_file then
+  if print_stdout then
+    print(body)
+    os.exit(0)
+  else
+    -- default to just input_file.html
+    output_file = input_file:gsub("%.let$", "") .. ".html" 
   end
 end
+
+-- outputting the file!
+local outf = io.open(output_file, "w")
+outf:write(body)
+outf:close()

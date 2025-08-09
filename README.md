@@ -14,14 +14,15 @@ Letdown aspires to be:
 All without being overly spartan.
 
 > [!WARNING]
-> This markup language is still in beta- expect non-backwards-compatible changes in the future.
+> This markup language is still in beta- expect non-backwards-compatible changes
+> in the future.
 
 ## Features
 
 - blank-line-delimited blocks (no writing everything on one line, *ahem* gemtext)
 - 3 levels of headings
 - unordered, non-nestable lists
-- links
+- reference-style links
 - one level of emphasis (who needs both bold *and* italics?)
 - block-level images
 - blockquotes
@@ -29,14 +30,40 @@ All without being overly spartan.
 - comments
 - tagging
 
+## Using letdown.lua
+
+Included in this repo is a Lua script that will convert files in this markup 
+language (`.let` files) into HTML.
+
+Feel free to run `lua letdown.lua -h` to get some basic usage information.
+
+By default, the script just outputs the content that would go inside an HTML
+`<body>` tag. However, this script allows for the use of HTML templates with 
+the `-t` flag.
+
+The script supports the following templating features to be used in template HTML
+files:
+
+- `%body` inserts the basic output body of the letdown file
+- `%tags` inserts tags as a comma-separated list
+- `%file` inserts the name of the file, without its `.let` extension
+- `%h1` inserts the text of the first `<h1>` (i.e. `= `) element
+
+Example:
+
+```sh
+lua letdown.lua file.let -t template.html -o newfile.html
+```
+
+The resulting file will be `newfile.html` using `template.html` as a template.
+
 ## Resources
 
-Included in this repo is a Lua script that will convert files in this markup
-language (`.let` or `.letdown` files) into HTML. To use it, make sure you have
-installed Lua and run `lua letdown.lua -h` to learn how to use it.
+See `letdown.ebnf` for a (rough) grammar of this language in EBNF notation.
 
-See `letdown.ebnf` for a grammar of this language in EBNF notation.
+See `tour.md` for a description/tour of the language.
 
-See `TOUR.md` for a description/tour of the language.
+See `example.let` for an example that showcases every feature of the language.
 
-See `example.let` for an example that shows all of the features of the language.
+`letdown.yaml` contains syntax highlighting support for the 
+[micro](https://github.com/zyedidia/micro) text editor.

@@ -145,7 +145,7 @@ local function parse_letdown(text)
   local first_h1 = nil
 
   -- first pass, get link definitions and remove them from text
-  text = text:gsub("\n%[(.-)%]:%s+(%S+)%s*\n", function(label, url)
+  text = text:gsub("%[([^%]]+)%]:%s+(%S+)", function(label, url)
     linkdefs[label] = url
     return "\n"
   end)

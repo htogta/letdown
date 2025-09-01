@@ -76,7 +76,8 @@ local function parse_spans(text)
     local url = linkdefs[trimmed]
     if url then
       -- links defined with a linkdef will open in a new tab
-      return string.format('<a href="%s" target="_blank">%s</a>', escape_html(url), escape_html(label))
+      local path = url:gsub("%.let$", ".html") -- if url is ".let", replace with ".html"
+      return string.format('<a href="%s" target="_blank">%s</a>', escape_html(path), escape_html(label))
     else
       -- assume the path is "label.html" with spaces replaced by underscores
       local safe_label = trimmed:gsub("%s+", "_")

@@ -31,6 +31,10 @@ Here is a
 I am inside a code block B)
 ```
 
+Here is a test of [let urls].
+
+[let urls]: nowhere.let ;; this should become "nowhere.html" in the html output ;;
+
 => praying-mantis.jpg The Praying Mantis by E. J. Detmold
 
 That's some cool stuff right there.

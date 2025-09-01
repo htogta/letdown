@@ -19,6 +19,8 @@ linktext.let, with any spaces replaced with underscores ;;
 > Here is a block quote, it should, well, be a block quote. 
 > You know what those are.
 
+--- ;; a horizontal rule ;;
+
 Here is a
 
 - bulleted

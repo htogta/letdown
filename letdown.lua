@@ -134,6 +134,10 @@ local function emit_paragraph(block)
   return "<p>" .. parse_spans(block) .. "</p>"
 end
 
+local function emit_hr()
+  return "<hr>"
+end
+
 -- parse letdown blocks from text
 local function parse_letdown(text)
   -- strip comments and hashtags first
@@ -184,6 +188,8 @@ local function parse_letdown(text)
       table.insert(html_blocks, emit_quote(block))
     elseif block:match("^```") then
       table.insert(html_blocks, emit_code(block))
+    elseif block:match("^%-%-%-") then
+      table.insert(html_blocks, emit_hr())
     else
       table.insert(html_blocks, emit_paragraph(block))
     end

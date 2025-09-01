@@ -10,6 +10,7 @@ block = heading
       | linkdef
       | image
       | quote
+      | hr
       | code
       | paragraph ;
 
@@ -17,6 +18,8 @@ heading = ( h1 | h2 | h3 ) , "\n" ;
 h1 = "= " , TEXT ;
 h2 = "== " , TEXT ;
 h3 = "=== " , TEXT ;
+
+hr = "---" , "\n";
 
 linkdef = "[" , TEXT , "]: " , PATH , "\n"
 

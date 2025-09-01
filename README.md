@@ -29,6 +29,7 @@ All without being overly spartan.
 - inline code and code blocks
 - comments
 - tagging
+- horizontal rule
 
 ## Using letdown.lua
 

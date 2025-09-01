@@ -48,6 +48,10 @@ Block quotes are groups of lines that start with `> `, like so:
 > and this line is still part of it
 ```
 
+### Horizontal rules
+
+To insert a block-level horizontal rule/bar, use `---` on its own line.
+
 ### Code blocks
 
 Code blocks are surrounded in triple-backticks. Comments, hashtags, link 

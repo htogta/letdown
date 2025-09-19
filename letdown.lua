@@ -254,6 +254,11 @@ if version then
 end
 
 -- reading input file
+if not input_file then
+  print_usage()
+  os.exit(1)
+end
+
 local f = io.open(input_file, "r")
 if not f then
   print("Could not open file: " .. input_file .. "\n")
@@ -282,10 +287,10 @@ if html_template then
   end
 
   template_str = template_str
-    :gsub("%%body", body or "")
-    :gsub("%%tags", table.concat(tags, ", ") or "")
-    :gsub("%%file", filebase)
-    :gsub("%%h1", first_h1 or "")
+    :gsub("%%body", function() return body or "" end)
+    :gsub("%%tags", function() return table.concat(tags, ", ") or "" end)
+    :gsub("%%file", function() return filebase end)
+    :gsub("%%h1", function() return first_h1 or "" end)
 
   body = template_str
 end
